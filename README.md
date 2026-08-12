@@ -83,6 +83,9 @@ to **"Run only when user is logged on"** and the **Triggers** settings
 from **"At startup"** to **"At log on"**. This has historically operated
 properly, but has not been extensively tested for race conditions.
 
+**NOTE:** Administrative access for the task is still an open feature, and
+should be added when possible to categorically avoid race conditions.
+
 If the display doesn't come up after a reboot, right-click the task in
 Task Scheduler → **History** to see if/when it ran, and check
 `server.log` in this folder (see below) to see what the server itself
