@@ -48,8 +48,8 @@ Edit `config.json` (or set the equivalent environment variable):
 
 Note: the current tag query has no rating filter, so results span
 Danbooru's full rating range. If you'd rather constrain that, append a
-rating tag, e.g. `"tags": "nero_claudius_(fate) rating:general"`. Tags 
-are appended space-separated, as shown in the prior string.
+rating tag, e.g. `"tags": "nero_claudius_(fate) rating:general"`. Tags
+are appended as space-separated, as shown in the previous string.
 
 ## What happens when you power cycle
 
@@ -72,13 +72,17 @@ screen until you type a password, the server — and therefore the display
 The simplest option is a small VBS wrapper so it starts silently with
 Windows and doesn't leave a console window open:
 
-1. Create `start-hidden.vbs` next to `server.js`:
-   ```vbs
-   Set WshShell = CreateObject("WScript.Shell")
-   WshShell.Run "node server.js", 0, False
-   ```
+1. `start-hidden.vbs` is already included in this folder — it pins its own
+   folder as the working directory before launching `node`, so it'll find
+   `server.js` no matter how Windows invokes it.
 2. Press `Win+R`, type `shell:startup`, and drop a shortcut to
    `start-hidden.vbs` in that folder.
+
+Since this launches with no visible window, there's no terminal to click
+into afterward. To stop it: Task Manager (`Ctrl+Shift+Esc`) → **Details**
+tab → find `node.exe` (add the **Command line** column via a right-click
+on the header if you need to tell it apart from other Node processes) →
+**End task**. To restart: double-click `start-hidden.vbs` again.
 
 For something more robust — auto-restart if `node` ever crashes, no
 dependence on someone being logged in — use Task Scheduler instead:
