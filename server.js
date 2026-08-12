@@ -16,6 +16,23 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+// ---------- Logging ----------
+// Writes to the console AND to server.log, since this process is often
+// launched with no visible console window (Task Scheduler, hidden VBS).
+// server.log is the only way to see what happened on a given boot.
+const LOG_PATH = path.join(__dirname, 'server.log');
+function log(level, message) {
+  const line = `[${new Date().toISOString()}] ${message}`;
+  if (level === 'error') console.error(line);
+  else if (level === 'warn') console.warn(line);
+  else console.log(line);
+  try {
+    fs.appendFileSync(LOG_PATH, line + '\n');
+  } catch (err) {
+    // Nothing more we can do if the log file itself isn't writable.
+  }
+}
+
 // ---------- Configuration ----------
 // Loaded from config.json if present, otherwise from environment variables.
 let fileConfig = {};
@@ -24,7 +41,7 @@ if (fs.existsSync(configPath)) {
   try {
     fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   } catch (err) {
-    console.error('Could not parse config.json:', err.message);
+    log('error', `Could not parse config.json: ${err.message}`);
   }
 }
 
@@ -37,7 +54,7 @@ const CONFIG = {
 };
 
 if (!CONFIG.username || !CONFIG.apiKey) {
-  console.error(
+  log('error',
     'Missing Danbooru credentials. Set them in config.json (copy config.example.json) ' +
     'or as environment variables DANBOORU_USERNAME / DANBOORU_API_KEY.'
   );
@@ -56,18 +73,18 @@ try {
     const saved = JSON.parse(fs.readFileSync(LAST_IMAGE_PATH, 'utf8'));
     if (saved && saved.url) {
       currentImage = saved;
-      console.log(`Restored last known image from disk: ${currentImage.url}`);
+      log('info', `Restored last known image from disk: ${currentImage.url}`);
     }
   }
 } catch (err) {
-  console.warn('Could not read last-image.json, starting blank:', err.message);
+  log('warn', `Could not read last-image.json, starting blank: ${err.message}`);
 }
 
 function persistCurrentImage() {
   try {
     fs.writeFileSync(LAST_IMAGE_PATH, JSON.stringify(currentImage));
   } catch (err) {
-    console.warn('Could not save last-image.json:', err.message);
+    log('warn', `Could not save last-image.json: ${err.message}`);
   }
 }
 
@@ -89,11 +106,11 @@ async function fetchNewImage() {
     });
 
     if (response.status === 429) {
-      console.warn(`[${new Date().toISOString()}] Danbooru rate-limited us (429). Keeping current image, retrying in ${CONFIG.intervalMinutes}m.`);
+      log('warn', `Danbooru rate-limited us (429). Keeping current image, retrying in ${CONFIG.intervalMinutes}m.`);
       return;
     }
     if (!response.ok) {
-      console.warn(`[${new Date().toISOString()}] Danbooru returned ${response.status}. Keeping current image.`);
+      log('warn', `Danbooru returned ${response.status}. Keeping current image.`);
       return;
     }
 
@@ -103,12 +120,12 @@ async function fetchNewImage() {
     if (post && post.file_url) {
       currentImage = { url: post.file_url, fetchedAt: Date.now() };
       persistCurrentImage();
-      console.log(`[${new Date().toISOString()}] New image set: ${currentImage.url}`);
+      log('info', `New image set: ${currentImage.url}`);
     } else {
-      console.warn(`[${new Date().toISOString()}] Response had no usable file_url. Keeping current image.`);
+      log('warn', 'Response had no usable file_url. Keeping current image.');
     }
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Fetch failed: ${err.message}. Keeping current image.`);
+    log('error', `Fetch failed: ${err.message}. Keeping current image.`);
   }
 }
 
@@ -123,12 +140,12 @@ async function startupFetchWithRetry(maxAttempts = 5, delayMs = 20 * 1000) {
     await fetchNewImage();
     if (currentImage.fetchedAt !== before) return; // got a fresh one
     if (attempt < maxAttempts) {
-      console.log(`Startup fetch attempt ${attempt}/${maxAttempts} failed, retrying in ${delayMs / 1000}s...`);
+      log('info', `Startup fetch attempt ${attempt}/${maxAttempts} failed, retrying in ${delayMs / 1000}s...`);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }
   if (!hadRestoredImage) {
-    console.warn('Could not get an initial image after multiple attempts. Will keep trying every interval.');
+    log('warn', 'Could not get an initial image after multiple attempts. Will keep trying every interval.');
   }
 }
 
@@ -161,6 +178,6 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(CONFIG.port, () => {
-  console.log(`Kraken display server running at http://localhost:${CONFIG.port}`);
-  console.log(`Fetching a new image every ${CONFIG.intervalMinutes} minute(s).`);
+  log('info', `--- Kraken display server started, listening on http://localhost:${CONFIG.port} ---`);
+  log('info', `Fetching a new image every ${CONFIG.intervalMinutes} minute(s).`);
 });

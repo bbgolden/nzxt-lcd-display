@@ -5,18 +5,6 @@ one image from Danbooru every N minutes and serves a static page that shows
 it, so the LCD's embedded browser only ever has to poll a local JSON file —
 never Danbooru directly.
 
-## Why this fixes your two bugs
-
-**429 errors:** the Danbooru fetch runs on the *server's* own timer
-(`setInterval`), not in response to anything the display does. So it fires
-exactly once per interval, period — no matter how often the LCD polls,
-reconnects, or reloads the page.
-
-**Display not updating:** the page now explicitly compares the new image URL
-against the last one it showed, and when it differs, sets `img.src` with a
-cache-busting query string. That forces the embedded browser to actually
-fetch and repaint the new image instead of assuming nothing changed.
-
 ## Setup
 
 1. Install [Node.js](https://nodejs.org) 18 or later (needed for the
@@ -48,7 +36,7 @@ Edit `config.json` (or set the equivalent environment variable):
 
 Note: the current tag query has no rating filter, so results span
 Danbooru's full rating range. If you'd rather constrain that, append a
-rating tag, e.g. `"tags": "nero_claudius_(fate) rating:general"`. Tags
+rating tag, e.g. `"tags": "nero_claudius_(fate) rating:general"`. Tags 
 are appended as space-separated, as shown in the previous string.
 
 ## What happens when you power cycle
@@ -69,37 +57,58 @@ screen until you type a password, the server — and therefore the display
 
 ## Keeping it running in the background (Windows)
 
-The simplest option is a small VBS wrapper so it starts silently with
-Windows and doesn't leave a console window open:
+**Recommended: Task Scheduler.** Items in the Windows Startup folder are
+deliberately delayed by Windows by an unpredictable amount (anywhere from
+a few seconds to over a minute) to keep login responsive — so if CAM
+tries to connect before your server has actually started, it fails, and
+CAM won't retry on its own; you'd have to reload it manually. Task
+Scheduler starts things immediately and consistently, and — unlike a
+hidden VBS script — keeps a real history you can check if something
+doesn't come up.
 
-1. `start-hidden.vbs` is already included in this folder — it pins its own
-   folder as the working directory before launching `node`, so it'll find
-   `server.js` no matter how Windows invokes it.
-2. Press `Win+R`, type `shell:startup`, and drop a shortcut to
-   `start-hidden.vbs` in that folder.
+1. Open Task Scheduler → **Create Task**.
+2. **General** tab: check **"Run whether user is logged on or not."**
+3. **Triggers** tab: New → **"At startup"** (not **"At log on"** — this
+   starts the server before user-session items like CAM even begin
+   loading, so it wins the race).
+4. **Actions** tab: New → Program `node.exe`, arguments `server.js`,
+   "Start in" set to this folder's full path. Note that the "Start
+   in" field does **NOT** accept quotation marks.
+5. **Settings** tab: check **"If the task fails, restart every"** and
+   pick something like 1 minute.
 
-Since this launches with no visible window, there's no terminal to click
-into afterward. To stop it: Task Manager (`Ctrl+Shift+Esc`) → **Details**
-tab → find `node.exe` (add the **Command line** column via a right-click
-on the header if you need to tell it apart from other Node processes) →
-**End task**. To restart: double-click `start-hidden.vbs` again.
+Alternatively, if you face struggles with priveleged access at startup,
+change the **General** settings from **"Run whether user is logged on or not."** 
+to **"Run only when user is logged on"** and the **Triggers** settings
+from **"At startup"** to **"At log on"**. This has historically operated
+properly, but has not been extensively tested for race conditions.
 
-For something more robust — auto-restart if `node` ever crashes, no
-dependence on someone being logged in — use Task Scheduler instead:
+If the display doesn't come up after a reboot, right-click the task in
+Task Scheduler → **History** to see if/when it ran, and check
+`server.log` in this folder (see below) to see what the server itself
+was doing.
 
-1. Open Task Scheduler → Create Task.
-2. General tab: check "Run whether user is logged on or not."
-3. Triggers tab: New → "At startup" (not "At log on").
-4. Actions tab: New → Program `node.exe`, arguments `server.js`, "Start
-   in" set to this folder's path.
-5. Settings tab: check "If the task fails, restart every" and pick e.g.
-   1 minute.
+**Simpler alternative: Startup folder + `start-hidden.vbs`.** Included in
+this folder — press `Win+R`, type `shell:startup`, and drop a shortcut to
+it there. It's less code to set up, but given the timing issue above,
+it's more likely to need a manual CAM refresh after a cold boot. Fine for
+a quick test; Task Scheduler is the one to trust long-term.
 
-That combination survives both power cycles and the occasional crash
-without you needing to do anything. [pm2](https://pm2.keymetrics.io/) or
-[NSSM](https://nssm.cc/) are heavier alternatives if you want proper
-service management and log rotation later, but Task Scheduler alone
-covers the reliability you're asking about.
+Either way, there's no visible window once it's running. To stop it:
+Task Manager (`Ctrl+Shift+Esc`) → **Details** tab → find `node.exe` (add
+the **Command line** column via a right-click on the header if you need
+to tell it apart from other Node processes) → **End task**.
+
+## Checking what happened (`server.log`)
+
+Every run appends timestamped lines to `server.log` in this folder —
+fetch successes, rate-limit warnings, network errors, and a clear
+`--- Kraken display server started ---` line each time it boots. Since
+both the Task Scheduler and hidden-VBS methods run with no visible
+console, this file is the only way to see what actually happened after
+the fact. It's plain text — just open it. It grows slowly (one line per
+boot, one per 20-minute fetch), so there's no cleanup needed, but you can
+delete it anytime to clear it.
 
 ## Files
 

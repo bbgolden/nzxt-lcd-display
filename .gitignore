@@ -1,2 +1,7 @@
+# secrets
 config.json
 .env
+
+# local-only
+last-image.json
+server.log
