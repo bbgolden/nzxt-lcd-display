@@ -119,3 +119,4 @@ delete it anytime to clear it.
   (`/` and `/current-image.json`).
 - `public/index.html` — the display page shown on the LCD.
 - `config.example.json` — copy to `config.json` and fill in.
+- `.env.example` — copy to `.env` and fill in.
