@@ -121,6 +121,11 @@ async function fetchNewImage() {
       currentImage = { url: post.file_url, fetchedAt: Date.now() };
       persistCurrentImage();
       log('info', `New image set: ${currentImage.url}`);
+      if(post.tag_string_artist) {
+        log('info', `Art made by: ${post.tag_string_artist}`);
+      } else {
+        log('warn', 'Could not find artist tag_string.');
+      }
     } else {
       log('warn', 'Response had no usable file_url. Keeping current image.');
     }
