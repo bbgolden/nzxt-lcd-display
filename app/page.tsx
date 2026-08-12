@@ -7,6 +7,7 @@ async function getRandomImgSrc() {
     try {
       const response = await fetch(url);
       data = await response.json();
+      console.log(data);
     } catch (error) {
       console.error("Error fetching data: ", error);
     }
