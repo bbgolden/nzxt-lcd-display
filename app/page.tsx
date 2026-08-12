@@ -1,7 +1,7 @@
 import Image from "next/image";
 
 async function getRandomImgSrc() {
-    const url = "https://testbooru.donmai.us/posts.json?random=true&limit=1";
+    const url = "https://danbooru.donmai.us/posts.json?random=true&limit=1&tags=nero_claudius_(fate)";
     let data;
 
     try {
@@ -12,7 +12,7 @@ async function getRandomImgSrc() {
       console.error("Error fetching data: ", error);
     }
 
-    return data[0].id;
+    return data[0].file_url;
   }
 
 export default async function Home() {
@@ -22,7 +22,7 @@ export default async function Home() {
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image src={ img_src } alt = "A randomly retrieved Danbooru image."/>
+        <Image src={ img_src } alt = "A randomly retrieved Danbooru image." height={ 320 } width={ 320 }/>
       </main>
     </div>
   );
