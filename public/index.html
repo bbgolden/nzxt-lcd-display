@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Kraken Display</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+    overflow: hidden;
+    user-select: none;
+  }
+  #frame {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+  #frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+</style>
+</head>
+<body>
+  <div id="frame">
+    <img id="display-image" alt="" />
+  </div>
+
+<script>
+  var frame = document.getElementById('frame');
+  var img = document.getElementById('display-image');
+
+  // Respect NZXT CAM's injected hardware hooks (screen size / circle shape), if present.
+  if (window.nzxt && window.nzxt.v1) {
+    var kraken = window.nzxt.v1;
+    frame.style.width = kraken.width + 'px';
+    frame.style.height = kraken.height + 'px';
+    if (kraken.shape === 'circle') {
+      frame.style.borderRadius = '50%';
+    }
+  }
+
+  var lastUrl = null;
+
+  function checkForNewImage() {
+    fetch('/current-image.json', { cache: 'no-store' })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.url && data.url !== lastUrl) {
+          lastUrl = data.url;
+          // Cache-bust so the embedded browser can't silently reuse a stale copy,
+          // and force a fresh <img> load rather than relying on attribute diffing.
+          img.src = data.url + (data.url.indexOf('?') > -1 ? '&' : '?') + 'cb=' + data.fetchedAt;
+        }
+      })
+      .catch(function () {
+        // Transient network hiccup — just try again on the next poll.
+      });
+  }
+
+  checkForNewImage();
+  // This poll is cheap: it only ever hits our own local server, never Danbooru.
+  setInterval(checkForNewImage, 30 * 1000);
+</script>
+</body>
+</html>
