@@ -1,29 +1,41 @@
-import Image from "next/image";
+import { useEffect, useState } from 'react';
+import CustomKrakenImage from '@/components/CustomKrakenImage';
 
-async function getRandomImgSrc() {
-    const url = "https://danbooru.donmai.us/posts.json?random=true&limit=1&tags=nero_claudius_(fate)";
-    let data;
+export default function KrakenDisplayPage() {
+  const [dimensions, setDimensions] = useState({ width: '100vw', height: '100vh' });
+  const [isCircle, setIsCircle] = useState(false);
 
-    try {
-      const response = await fetch(url);
-      data = await response.json();
-      console.log(data);
-    } catch (error) {
-      console.error("Error fetching data: ", error);
+  useEffect(() => {
+    // Safely check for NZXT CAM's injected hardware hooks on mount
+    if (typeof window !== 'undefined' && (window as any).nzxt?.v1) {
+      const kraken = (window as any).nzxt.v1;
+      setDimensions({
+        width: `${kraken.width}px`,
+        height: `${kraken.height}px`,
+      });
+      if (kraken.shape === 'circle') {
+        setIsCircle(true);
+      }
     }
-
-    return data[0].file_url;
-  }
-
-export default async function Home() {
-
-  const img_src = await getRandomImgSrc();
+  }, []);
 
   return (
-    <div>
-      <main>
-        <Image src={ img_src } alt = "A randomly retrieved Danbooru image." height={ 320 } width={ 320 }/>
-      </main>
-    </div>
+    <main className="w-full h-full flex justify-center items-center">
+      {/* 
+        This wrapper container strictly dictates the boundaries 
+        of the physical screen. Flex centering forces it into 
+        the exact horizontal and vertical middle.
+      */}
+      <div 
+        className="relative flex justify-center items-center overflow-hidden"
+        style={{ 
+          width: dimensions.width, 
+          height: dimensions.height,
+          borderRadius: isCircle ? '50%' : '0%' 
+        }}
+      >
+        <CustomKrakenImage />
+      </div>
+    </main>
   );
 }
