@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from 'react';
 import CustomKrakenImage from '@/components/CustomKrakenImage';
 

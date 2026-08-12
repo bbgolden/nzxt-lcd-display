@@ -1,5 +1,4 @@
 import Image from 'next/image';
-import { useState, useEffect } from 'react';
 
 async function getRandomImgSrc() {
     const url = "https://danbooru.donmai.us/posts.json?random=true&limit=1&tags=nero_claudius_(fate)";
@@ -17,18 +16,7 @@ async function getRandomImgSrc() {
 }
 
 export default async function CustomKrakenImage() {
-  const [imgSrc, setImgSrc] = useState(await getRandomImgSrc() ); // Your Vercel endpoint
-
-  useEffect(() => {
-    // Example: Long-polling or WebSocket setup to listen for Vercel updates
-    const interval = setInterval(() => {
-      const cacheBuster = new Date().getTime();
-      // Appending a timestamp query string overrides CAM's internal cache engine
-      setImgSrc(`/api/current-image?t=${cacheBuster}`);
-    }, 2000); // Check for updates every 2 seconds
-
-    return () => clearInterval(interval);
-  }, []);
+  const imgSrc = await getRandomImgSrc();
 
   return (
     <Image
