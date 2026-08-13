@@ -1,13 +1,16 @@
 // server.js
 //
 // Minimal, dependency-free Node.js server for an NZXT Kraken image display.
-// Fetches ONE image from Danbooru on a fixed timer (default: every 20 minutes)
-// and serves it to the display via a tiny JSON endpoint + a static HTML page.
+// Fetches ONE image from Danbooru on its own schedule — at a randomized
+// interval between 15 and 30 minutes by default — and serves it to the
+// display via a tiny JSON endpoint + a static HTML page.
 //
 // Why this fixes the 429s: the Danbooru fetch happens on the server's own
-// setInterval, completely decoupled from how often the display polls or
+// schedule, completely decoupled from how often the display polls or
 // reloads. No matter how chatty the LCD's embedded browser is, Danbooru
-// only ever gets hit once per interval.
+// only ever gets hit once per interval — and randomizing the interval
+// (rather than a perfectly fixed cadence) also avoids looking like a
+// predictable, bot-like polling pattern to Danbooru's rate limiter.
 //
 // Requires Node.js 18+ (for the built-in global `fetch`). No npm install
 // needed.
@@ -49,7 +52,8 @@ const CONFIG = {
   username: fileConfig.username || process.env.DANBOORU_USERNAME,
   apiKey: fileConfig.apiKey || process.env.DANBOORU_API_KEY,
   tags: fileConfig.tags || process.env.DANBOORU_TAGS || 'nero_claudius_(fate)',
-  intervalMinutes: Number(fileConfig.intervalMinutes || process.env.FETCH_INTERVAL_MINUTES || 20),
+  minIntervalMinutes: Number(fileConfig.minIntervalMinutes || process.env.FETCH_MIN_INTERVAL_MINUTES || 15),
+  maxIntervalMinutes: Number(fileConfig.maxIntervalMinutes || process.env.FETCH_MAX_INTERVAL_MINUTES || 30),
   port: Number(fileConfig.port || process.env.PORT || 3000),
 };
 
@@ -61,8 +65,17 @@ if (!CONFIG.username || !CONFIG.apiKey) {
   process.exit(1);
 }
 
-const FETCH_INTERVAL_MS = CONFIG.intervalMinutes * 60 * 1000;
 const LAST_IMAGE_PATH = path.join(__dirname, 'last-image.json');
+
+// Picks a random interval in [minIntervalMinutes, maxIntervalMinutes] each
+// time it's called — a fresh roll before every fetch, not a fixed value
+// reused for the whole run.
+function randomIntervalMs() {
+  const min = CONFIG.minIntervalMinutes;
+  const max = CONFIG.maxIntervalMinutes;
+  const minutes = min + Math.random() * (max - min);
+  return Math.round(minutes * 60 * 1000);
+}
 
 // ---------- State ----------
 // Seed from disk if we have it, so a fresh boot shows last session's image
@@ -106,7 +119,7 @@ async function fetchNewImage() {
     });
 
     if (response.status === 429) {
-      log('warn', `Danbooru rate-limited us (429). Keeping current image, retrying in ${CONFIG.intervalMinutes}m.`);
+      log('warn', 'Danbooru rate-limited us (429). Keeping current image, will try again next cycle.');
       return;
     }
     if (!response.ok) {
@@ -121,11 +134,6 @@ async function fetchNewImage() {
       currentImage = { url: post.file_url, fetchedAt: Date.now() };
       persistCurrentImage();
       log('info', `New image set: ${currentImage.url}`);
-      if(post.tag_string_artist) {
-        log('info', `Art made by: ${post.tag_string_artist}`);
-      } else {
-        log('warn', 'Could not find artist tag_string.');
-      }
     } else {
       log('warn', 'Response had no usable file_url. Keeping current image.');
     }
@@ -137,7 +145,7 @@ async function fetchNewImage() {
 // On startup only: retry a few times with short gaps in case the network
 // (Wi-Fi, DNS, etc.) isn't fully up yet moments after boot/login. This does
 // NOT change steady-state behavior — once it succeeds (or gives up), we
-// settle into exactly one fetch per FETCH_INTERVAL_MS, forever.
+// hand off to the randomized-interval schedule below.
 async function startupFetchWithRetry(maxAttempts = 5, delayMs = 20 * 1000) {
   const hadRestoredImage = Boolean(currentImage.url);
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -150,12 +158,23 @@ async function startupFetchWithRetry(maxAttempts = 5, delayMs = 20 * 1000) {
     }
   }
   if (!hadRestoredImage) {
-    log('warn', 'Could not get an initial image after multiple attempts. Will keep trying every interval.');
+    log('warn', 'Could not get an initial image after multiple attempts. Will keep trying on the normal schedule.');
   }
 }
 
-startupFetchWithRetry();
-setInterval(fetchNewImage, FETCH_INTERVAL_MS); // then strictly once per interval, forever
+// Steady-state scheduling: fetch, then wait a freshly-randomized interval
+// (CONFIG.minIntervalMinutes to CONFIG.maxIntervalMinutes) before fetching
+// again — never a fixed cadence, so it's never exactly N minutes apart.
+function scheduleNextFetch() {
+  const delayMs = randomIntervalMs();
+  log('info', `Next fetch in ~${(delayMs / 60000).toFixed(1)} minute(s).`);
+  setTimeout(async () => {
+    await fetchNewImage();
+    scheduleNextFetch();
+  }, delayMs);
+}
+
+startupFetchWithRetry().then(scheduleNextFetch);
 
 // ---------- HTTP server ----------
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -184,5 +203,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(CONFIG.port, () => {
   log('info', `--- Kraken display server started, listening on http://localhost:${CONFIG.port} ---`);
-  log('info', `Fetching a new image every ${CONFIG.intervalMinutes} minute(s).`);
+  log('info', `Fetching a new image every ${CONFIG.minIntervalMinutes}-${CONFIG.maxIntervalMinutes} minutes (randomized).`);
 });

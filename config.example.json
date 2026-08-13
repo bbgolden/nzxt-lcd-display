@@ -2,6 +2,7 @@
   "username": "danbooru-username",
   "apiKey": "danbooru-api-key",
   "tags": "nero_claudius_(fate)",
-  "intervalMinutes": 20,
+  "minIntervalMinutes": 15,
+  "maxIntervalMinutes": 30,
   "port": 3000
 }

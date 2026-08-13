@@ -31,7 +31,8 @@ Edit `config.json` (or set the equivalent environment variable):
 | `username`         | `DANBOORU_USERNAME`        | required                    |
 | `apiKey`            | `DANBOORU_API_KEY`         | required                    |
 | `tags`              | `DANBOORU_TAGS`             | `nero_claudius_(fate)`      |
-| `intervalMinutes`  | `FETCH_INTERVAL_MINUTES`   | `20`                        |
+| `minIntervalMinutes` | `FETCH_MIN_INTERVAL_MINUTES` | `15`                     |
+| `maxIntervalMinutes` | `FETCH_MAX_INTERVAL_MINUTES` | `30`                     |
 | `port`              | `PORT`                      | `3000`                      |
 
 Note: the current tag query has no rating filter, so results span
@@ -40,15 +41,15 @@ rating tag, e.g. `"tags": "nero_claudius_(fate) rating:general"`. Tags
 are appended as space-separated, as shown in the previous string.
 
 ## What happens when you power cycle
-
+ 
 Every time `server.js` starts, it immediately re-fetches an image (with a
 few short retries if the network isn't up yet) and then falls back to the
-normal 20-minute timer — so a reboot naturally refreshes the display, it
+normal randomized-interval schedule (15-30 minutes by default) — so a reboot naturally refreshes the display, it
 doesn't break anything. It also saves the last image it fetched to
 `last-image.json` and reloads that on startup, so the screen shows last
 session's picture right away instead of sitting blank while the first
 fetch is in flight.
-
+ 
 One thing to check: items in the Windows Startup folder only run once you
 **log in**, not at the moment the PC powers on. If this PC boots straight
 to your desktop (auto-login enabled), you're fine. If it sits at a login
