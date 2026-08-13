@@ -49,6 +49,59 @@
     }
   }
 
+  // Needed before setting img.src, so we're allowed to read pixels back
+  // out of the canvas below — assuming the image host's CORS headers
+  // permit it. If they don't, sampling just fails quietly (see catch below)
+  // and the border stays black, same as before this feature existed.
+  img.crossOrigin = 'anonymous';
+
+  // Small canvas — large enough to have a meaningful ring of edge pixels,
+  // still tiny enough that scanning it is trivial. The browser's own
+  // (hardware-accelerated) image scaler does the actual downsampling work
+  // when we draw the full image into this small square.
+  var SAMPLE_SIZE = 80;
+  // How many pixels deep the edge ring goes, in from each side of the
+  // sampled square. 1 = just the outermost pixel border. Increase for a
+  // thicker (more averaged, less edge-precise) sample; keep it well under
+  // SAMPLE_SIZE / 2 or the "ring" starts covering the whole square.
+  var RING_WIDTH = 1;
+  var sampleCanvas = document.createElement('canvas');
+  sampleCanvas.width = SAMPLE_SIZE;
+  sampleCanvas.height = SAMPLE_SIZE;
+  var sampleCtx = sampleCanvas.getContext('2d');
+
+  img.onload = function () {
+    try {
+      sampleCtx.drawImage(img, 0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
+      var data = sampleCtx.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE).data;
+
+      // Average only the outer ring of pixels, not the whole square. The
+      // letterbox/pillarbox gap is only ever adjacent to the image's own
+      // edges, so this matches the border color much better than a
+      // whole-image average.
+      var r = 0, g = 0, b = 0, count = 0;
+      for (var y = 0; y < SAMPLE_SIZE; y++) {
+        for (var x = 0; x < SAMPLE_SIZE; x++) {
+          var inRing = x < RING_WIDTH || y < RING_WIDTH ||
+            x >= SAMPLE_SIZE - RING_WIDTH || y >= SAMPLE_SIZE - RING_WIDTH;
+          if (inRing) {
+            var i = (y * SAMPLE_SIZE + x) * 4;
+            r += data[i];
+            g += data[i + 1];
+            b += data[i + 2];
+            count++;
+          }
+        }
+      }
+
+      var color = 'rgb(' + Math.round(r / count) + ',' + Math.round(g / count) + ',' + Math.round(b / count) + ')';
+      document.body.style.backgroundColor = color;
+    } catch (err) {
+      // Tainted canvas (host doesn't allow cross-origin pixel reads) or
+      // some other sampling failure — just leave the background as-is.
+    }
+  };
+
   var lastUrl = null;
 
   function checkForNewImage() {

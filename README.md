@@ -113,6 +113,20 @@ the fact. It's plain text — just open it. It grows slowly (one line per
 boot, one per 20-minute fetch), so there's no cleanup needed, but you can
 delete it anytime to clear it.
 
+## Background granularity
+
+Every time we fetch a new image, we assign the background color to be an
+approximate match to the border color of the image in order to avoid
+awkward black borders on the circular LCD display. There are two key
+knobs in `index.html` that dictate how this works: `SAMPLE_SIZE` (N) and
+`RING_WIDTH` (M).
+
+Sampled images are compressed to an NxN representation to average their 
+colors. Then, M pixels are sampled from the representation around all four
+sides and the average color is calculated. Increasing `SAMPLE_SIZE` (N) 
+improves the color accuracy at the cost of computation. Increasing `RING_WIDTH` 
+(M) leads to a more averaged but less border-precise background color.
+
 ## Files
 
 - `server.js` — the whole server: fetch timer + two HTTP routes
