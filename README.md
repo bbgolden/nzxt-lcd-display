@@ -78,11 +78,13 @@ doesn't come up.
 5. **Settings** tab: check **"If the task fails, restart every"** and
    pick something like 1 minute.
 
-Alternatively, if you face struggles with priveleged access at startup,
+Alternatively, if you face struggles with privileged access at startup,
 change the **General** settings from **"Run whether user is logged on or not."** 
 to **"Run only when user is logged on"** and the **Triggers** settings
-from **"At startup"** to **"At log on"**. This has historically operated
-properly, but has not been extensively tested for race conditions.
+from **"At startup"** to **"At log on"**. NZXT CAM takes much longer
+to load at startup than the script in `server.js` so it's highly 
+unlikely that any race conditions could occur. However, this has not
+been rigorously tested.
 
 **NOTE:** Administrative access for the task is still an open feature, and
 should be added when possible to categorically avoid race conditions.
