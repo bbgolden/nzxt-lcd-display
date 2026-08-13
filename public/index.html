@@ -59,43 +59,95 @@
   // still tiny enough that scanning it is trivial. The browser's own
   // (hardware-accelerated) image scaler does the actual downsampling work
   // when we draw the full image into this small square.
-  var SAMPLE_SIZE = 80;
-  // How many pixels deep the edge ring goes, in from each side of the
+  var SAMPLE_SIZE = 40;
+  // How many pixels deep the outer ring goes, in from each side of the
   // sampled square. 1 = just the outermost pixel border. Increase for a
   // thicker (more averaged, less edge-precise) sample; keep it well under
   // SAMPLE_SIZE / 2 or the "ring" starts covering the whole square.
   var RING_WIDTH = 1;
+  // Fraction of the sampled square's width/height, measured in from each
+  // edge, that counts as "near a corner." The middle of each edge is
+  // skipped entirely — that's usually where a pose, arms, or hair reach
+  // toward the frame, so it's the least reliable spot for guessing
+  // background color, on any side. 0.25 = the outer quarter in from each
+  // edge counts; the middle half of each edge is excluded.
+  var CORNER_BAND = 0.25;
+  // Bucket size (per channel, 0-255) used to group similar colors together
+  // before counting which one shows up most. Smaller = finer distinctions
+  // between similar shades (more buckets, mode is "spikier" and more
+  // sensitive to noise); larger = more colors get merged into the same
+  // bucket (mode is more stable, but coarser).
+  var QUANT = 24;
   var sampleCanvas = document.createElement('canvas');
   sampleCanvas.width = SAMPLE_SIZE;
   sampleCanvas.height = SAMPLE_SIZE;
   var sampleCtx = sampleCanvas.getContext('2d');
+
+  // Groups pixels into buckets by quantized color, then returns the exact
+  // average color of whichever bucket has the most pixels in it. Unlike a
+  // per-channel median, this clusters R/G/B jointly — so a sample split
+  // between two genuinely different colors (e.g. sky-blue and grass-green)
+  // won't get blended into some third color that matches neither; it just
+  // picks whichever of the two actually has more pixels.
+  function dominantColor(rs, gs, bs) {
+    var buckets = {};
+    for (var i = 0; i < rs.length; i++) {
+      var key = (rs[i] / QUANT | 0) + '_' + (gs[i] / QUANT | 0) + '_' + (bs[i] / QUANT | 0);
+      var bucket = buckets[key];
+      if (!bucket) {
+        bucket = { count: 0, rSum: 0, gSum: 0, bSum: 0 };
+        buckets[key] = bucket;
+      }
+      bucket.count++;
+      bucket.rSum += rs[i];
+      bucket.gSum += gs[i];
+      bucket.bSum += bs[i];
+    }
+
+    var winner = null;
+    for (var key in buckets) {
+      if (!winner || buckets[key].count > winner.count) winner = buckets[key];
+    }
+
+    return 'rgb(' +
+      Math.round(winner.rSum / winner.count) + ',' +
+      Math.round(winner.gSum / winner.count) + ',' +
+      Math.round(winner.bSum / winner.count) + ')';
+  }
 
   img.onload = function () {
     try {
       sampleCtx.drawImage(img, 0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
       var data = sampleCtx.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE).data;
 
-      // Average only the outer ring of pixels, not the whole square. The
-      // letterbox/pillarbox gap is only ever adjacent to the image's own
-      // edges, so this matches the border color much better than a
-      // whole-image average.
-      var r = 0, g = 0, b = 0, count = 0;
+      // Collect ring pixels near any of the four corners. Sampling near
+      // corners rather than full edge length works regardless of whether
+      // an image ends up pillarboxed (gap on the sides) or letterboxed
+      // (gap top/bottom) — corners are the safest bet for background
+      // either way, so this doesn't need to know or guess a given image's
+      // orientation.
+      var cornerBandPixels = Math.round(SAMPLE_SIZE * CORNER_BAND);
+      var rs = [], gs = [], bs = [];
       for (var y = 0; y < SAMPLE_SIZE; y++) {
+        var nearTopOrBottom = y < cornerBandPixels || y >= SAMPLE_SIZE - cornerBandPixels;
         for (var x = 0; x < SAMPLE_SIZE; x++) {
-          var inRing = x < RING_WIDTH || y < RING_WIDTH ||
-            x >= SAMPLE_SIZE - RING_WIDTH || y >= SAMPLE_SIZE - RING_WIDTH;
-          if (inRing) {
+          var nearLeftOrRight = x < cornerBandPixels || x >= SAMPLE_SIZE - cornerBandPixels;
+          // Must be near a corner in BOTH dimensions...
+          if (!nearTopOrBottom || !nearLeftOrRight) continue;
+          // ...and actually on the outer ring, not just somewhere inside
+          // that corner block.
+          var onRing = x < RING_WIDTH || x >= SAMPLE_SIZE - RING_WIDTH ||
+            y < RING_WIDTH || y >= SAMPLE_SIZE - RING_WIDTH;
+          if (onRing) {
             var i = (y * SAMPLE_SIZE + x) * 4;
-            r += data[i];
-            g += data[i + 1];
-            b += data[i + 2];
-            count++;
+            rs.push(data[i]);
+            gs.push(data[i + 1]);
+            bs.push(data[i + 2]);
           }
         }
       }
 
-      var color = 'rgb(' + Math.round(r / count) + ',' + Math.round(g / count) + ',' + Math.round(b / count) + ')';
-      document.body.style.backgroundColor = color;
+      document.body.style.backgroundColor = dominantColor(rs, gs, bs);
     } catch (err) {
       // Tainted canvas (host doesn't allow cross-origin pixel reads) or
       // some other sampling failure — just leave the background as-is.

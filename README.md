@@ -115,17 +115,32 @@ delete it anytime to clear it.
 
 ## Background granularity
 
-Every time we fetch a new image, we assign the background color to be an
-approximate match to the border color of the image in order to avoid
-awkward black borders on the circular LCD display. There are two key
-knobs in `index.html` that dictate how this works: `SAMPLE_SIZE` (N) and
-`RING_WIDTH` (M).
+Every time we fetch a new image, we assign the background color of the
+page to be a common, representative background color from the art itself.
 
-Sampled images are compressed to an NxN representation to average their 
-colors. Then, M pixels are sampled from the representation around all four
-sides and the average color is calculated. Increasing `SAMPLE_SIZE` (N) 
-improves the color accuracy at the cost of computation. Increasing `RING_WIDTH` 
-(M) leads to a more averaged but less border-precise background color.
+
+The methodology is to compress the artwork into a square, capture an outer 
+ring of the pixels, extract only the colors from each of the four corners, 
+and separate the colors into quantized bins. This guarantees that the 
+selected result is the most common color present in the corners and is 
+one that is actually present in the artwork. This is done using four
+tunable constants:
+
+1. `SAMPLE_SIZE` — the size in pixels of one side of a representative 
+   square made by compressing the original image. Increase to improve
+   the granularity of available colors.
+2. `RING_WIDTH` — the number of pixels (measured from each of the four
+   sides of the square) that are sampled to examine for coloring. 
+   Increase to offer more selection of colors to be quantized.
+3. `CORNER_BAND` — the fraction of each sampled corner's area that will
+   be actively used to select a color. Increase to offer more selection
+   of colors to be quantized.
+4. `QUANT` — the number of buckets per RGB channel that a color can be
+   sorted into. Increase to heighten color choice granularity, which
+   can make colors more specific but also worsens the risk of accidentally
+   choosing a non-representative color.
+
+They are located in `index.html` along with more detailed explanations.
 
 ## Files
 
